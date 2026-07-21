@@ -12,8 +12,7 @@
 module purge
 module load FastQC/0.12.1
 
-# Params
-PROJECT=$1 #Antipodean or Gibson's albatross
+# Set paths
 read_dir=/path/to/raw_data/illumina
 output_dir=/path/to/out/fastqc/fastqc_raw
 mkdir -p $output_dir
