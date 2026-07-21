@@ -6,11 +6,10 @@
 #SBATCH -o %x.%j.out
 #SBATCH -e %x.%j.err
 
-## Script to concatenate vcfs for each scaffold generated in the previous script
+## Script to concatenate VCFs for each scaffold generated in the previous script
 
 # Load modules
 module load HTSlib/1.19-GCC-11.3.0
-#module load VCFtools/0.1.15-GCC-9.2.0-Perl-5.30.1  ## possibly don't need
 module load BCFtools/1.19-GCC-11.3.0
 
 # Set paths 
