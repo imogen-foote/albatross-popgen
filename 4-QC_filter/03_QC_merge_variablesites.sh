@@ -16,9 +16,9 @@ export PYTHONNOUSERSITE=1
 conda activate /path/to/vcf_env
 
 # Set variables for filtering thresholds
-MISS=$3
-MAF=$4
-Q=$5
+MISS=$1
+MAF=$2
+Q=$3
 
 # Set paths
 vcf2R=/path/to/Rscripts/vcf2Rinput.R
