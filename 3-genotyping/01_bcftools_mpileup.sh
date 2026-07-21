@@ -8,6 +8,7 @@
 #SBATCH -e %x.%j.err
 
 ## Script to perform variant calling using bcftools mpileup command
+# This script will perform variant calling per scaffold/chromosome, and the output from each will be concatenated in the next step 
 
 ###!!!###              ###!!!####              ###!!!####         
 # determine the number of scaffold you want to genotype #
