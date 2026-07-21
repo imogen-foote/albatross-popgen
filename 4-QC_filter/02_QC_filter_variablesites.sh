@@ -32,7 +32,7 @@ N=${SLURM_ARRAY_TASK_ID}
 LG=$( head -n $N $REF.fai | tail -n 1 | cut -f 1 )
 
 # Set paths
-AB_script=/path/to/allelelic_imbalance_5.0.R
+AB_script=/path/to/Rscripts/allelelic_imbalance_5.0.R
 #AB_exclude=/path/to/samples.list #only if inital tests for allelic imbalance suggest removal of certain individuals.
 REF=/path/to/ref_genome.fasta
 VCF=/path/to/variablesitesvcf/variablesites
