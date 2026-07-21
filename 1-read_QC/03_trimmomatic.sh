@@ -20,12 +20,13 @@ output_dir=/path/to/data/trimmomatic
 ## Run trimmomatic
 # Use for loop as trimmomatic can only run on one file at a time
 for f in $read_dir/*_R1.fastq.gz ; do
-base=$(basename ${f%_H*})
-java -jar $trimmomatic PE \
--threads 12 -phred33 \
-${f} $read_dir/${base}*_R2.fastq.gz \
-$output_dir/${base}.forward_paired.fq.gz $output_dir/${base}.forward_unpaired.fq.gz \
-$output_dir/${base}.reverse_paired.fq.gz $output_dir/${base}.reverse_unpaired.fq.gz \
-ILLUMINACLIP:/path/to/adapt_seq/NexteraPE-PE.fa:2:30:10
+  base=$(basename ${f%_H*})
+  
+  java -jar $trimmomatic PE \
+    -threads 12 -phred33 \
+    ${f} $read_dir/${base}*_R2.fastq.gz \
+    $output_dir/${base}.forward_paired.fq.gz $output_dir/${base}.forward_unpaired.fq.gz \
+    $output_dir/${base}.reverse_paired.fq.gz $output_dir/${base}.reverse_unpaired.fq.gz \
+    ILLUMINACLIP:/path/to/adapt_seq/NexteraPE-PE.fa:2:30:10
 done
 
