@@ -7,7 +7,7 @@
 #SBATCH -o %x.%j.out
 #SBATCH -e %x.%j.err
 
-## Script to run quality filtering on VariableSites VCF 
+## Script to run quality filtering on VariableSites VCF, per scaffold
 
 ###!!!###                                       ###!!!####
 # determine the number of scaffolds you want to genotype #
