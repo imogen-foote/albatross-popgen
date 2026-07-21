@@ -21,11 +21,8 @@ source $(conda info --base)/etc/profile.d/conda.sh
 export PYTHONNOUSERSITE=1
 conda activate /path/to/env/paleomix
 
-TAXA=$1
-PROJECT=$2
-N=${SLURM_ARRAY_TASK_ID}
-
 # Set paths
+N=${SLURM_ARRAY_TASK_ID}
 sample_list=/path/to/resources/paleomix/samples.txt         # A txt file with list of sample names each on separate line
 sample=$( head -n $N $sample_list | tail -n 1 | cut -f 1 )  # Set sample name by extract Nth sample from sample list, according to array N
 read_dir=/path/to/data/paleomix/${sample}
