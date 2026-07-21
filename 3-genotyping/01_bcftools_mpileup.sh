@@ -7,6 +7,8 @@
 #SBATCH -o %x.%j.out
 #SBATCH -e %x.%j.err
 
+## Script to perform variant calling using bcftools mpileup command
+
 ###!!!###              ###!!!####              ###!!!####         
 # determine the number of scaffold you want to genotype #
 #               change --array accordingly		          #
