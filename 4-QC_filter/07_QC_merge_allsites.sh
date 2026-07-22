@@ -22,7 +22,7 @@ Q=$4
 # Set paths
 vcf2R=/path/to/Rscripts/vcf2Rinput.R
 gds2plink=/path/to/Rscripts/gds2plink.R
-POP=/path/to/pop_info.tsv # 2 column tab-delimited population file (POP IND)
+POP=/path/to/pop_info.tsv # 2 column tab-delimited population file (IND POP)
 VCF=/path/to/allsitesvcf/'allsites_qc_miss'$MISS'_Q'$Q
 TMP=/path/to/allsitesvcf/'tmp_miss'$MISS'_Q'$Q
 
