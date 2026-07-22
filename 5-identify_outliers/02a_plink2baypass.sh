@@ -43,14 +43,14 @@ fi
 ###
 # 2. Create a list of SNPs and assign line numbers, that will be used later to find matching line numbers in Baypass output (where SNP ID is lost)
 ###
-awk '{print $1"\t"$4"\t"$2"\t"NR}' $bed_file.bim > $baypass/${PROJECT}_snp_ids.txt
+awk '{print $1"\t"$4"\t"$2"\t"NR}' $bed_file.bim > $baypass/snp_ids.txt
 
 ###
 # 3. Extract A1_count and A2_count columns from step 1 and paste into new .txt file for Baypass input
 ###
 paste <(awk 'NR > 1 {print $5, $6}' $baypass/antipodean.frq.counts) \
       <(awk 'NR > 1 {print $5, $6}' $baypass/gibsons.frq.counts) \
-      > $baypass/${SET}_baypass_input.txt
+      > $baypass/baypass_input.txt
 
 ###
 # 3. Clean up temporary files
