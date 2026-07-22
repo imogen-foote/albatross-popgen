@@ -1,0 +1,40 @@
+---
+title: "baypass_estimate_omega_correlation"
+author: "Imogen Foote"
+date: "2025-07-11"
+output: html_document
+---
+
+### This script is to check correlation of omega matrices generated from 3 independent runs of BayPass (02b_estimate_omega_baypass.sh script), using random subsets of 100,000 SNPs each
+## If matrices are highly correlated, can pick one set of values to use for full BayPass run
+
+Read in omega matrices
+```{r}
+rm(list=ls())
+library(glue)
+
+DIR="/path/to/baypass/omega_matrices"
+
+omega1 <- as.matrix(read.table(glue("{DIR}/omega_subset1_mat_omega.out")))
+omega2 <- as.matrix(read.table(glue("{DIR}/omega_subset2_mat_omega.out")))
+omega3 <- as.matrix(read.table(glue("{DIR}/omega_subset3_mat_omega.out")))
+```
+
+Extract upper triangle
+```{r}
+get_upper_tri <- function(mat) mat[upper.tri(mat, diag = TRUE)]
+
+v1 <- get_upper_tri(omega1)
+v2 <- get_upper_tri(omega2)
+v3 <- get_upper_tri(omega3)
+
+```
+
+Calculate correlation matrix
+```{r}
+cor_matrix <- cor(cbind(v1, v2, v3))
+print(cor_matrix)
+
+write.table(cor_matrix, file = file.path(DIR, "omega_correlation_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
+
+```
