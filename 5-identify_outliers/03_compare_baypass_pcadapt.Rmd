@@ -1,0 +1,251 @@
+---
+title: "compare baypass and pcadapt"
+author: "Imogen Foote (adapted from Tom Oosting)"
+date: '2025-08-05'
+output: html_document
+---
+
+Load libraries
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(SNPRelate)
+library(scales)
+library(VennDiagram)
+library(RColorBrewer)
+library(ggpubr)
+
+source("/path/to/Rscripts/SNPrelate_functions.R")
+```
+
+Set variables
+```{r}
+Project   <- "AllAlbatross_antipodeanref"
+data_set  <- "variablesites"
+filter    <- "qc"
+K         <- 1
+q         <- 0.05
+miss      <- 0.95 
+maf       <- 0.05
+Q         <- 30
+
+
+snpfile_ext  <- glue("/path/to/variablesitesvcf/{Project}/{Project}_{data_set}_{filter}_miss{miss}_maf{maf}_Q{Q}")
+pcadapt_ext  <- glue("/path/to/{Project}/outlier_analysis/pcadapt/{Project}")
+baypass_ext  <- glue("/path/to/{Project}/outlier_analysis/baypass/{Project}")
+
+outfile_ext  <- glue("/path/to/out/{Project}/outlier_analysis/comparison_results/{Project}")
+dir.create(dirname(outfile_ext), recursive = TRUE)
+
+```
+
+Load in data
+```{r}
+#Load gds file
+gds <- snpgdsReadGDS(vcf_file = paste0(snpfile_ext,".vcf.gz"), 
+                     gds_file = paste0(snpfile_ext,".gds"))
+
+#Load sample information
+#A tsv file with columns for sample names (IND) & population name (POP)
+sample_info <- read_tsv(glue::glue("/path/to/{Project}_site_info.tsv"))
+```
+
+Set up colours and shapes for plotting
+```{r}
+#make set color df
+Npops      <- length(unique(sample_info$POP))
+hex_codes2 <- hue_pal()(Npops)
+shapes     <- c(rep(c(15,16,17,18),10))[1:Npops]
+
+#set colors and node shapes for pops
+pop_cols <- sample_info   %>% 
+            mutate(POP = factor(POP, levels = unique(POP))) %>% ##this ensures it retains the order of pops from sample_info rather than alphabetically
+            group_by(POP) %>% 
+            summarise(N = n()) %>% 
+            mutate(color = hex_codes2,
+                   shape = shapes)
+
+#filter rows of pop_cols to keep only those where 'POP' column values are found in sample_info$POP (again should be all, but check)
+pop_cols_select <- pop_cols %>% filter(POP %in% sample_info$POP)
+colors <- pop_cols_select$color
+shapes <- pop_cols_select$shape
+
+```
+
+Get some summary statistics from the GDS file
+```{r}
+#extract snp info from gds
+bim <- snpgdsSNPsum(gds = gds)
+
+#get chromosome information (chr length, cumulative length, LG) for downstream analysis incl. manhattan plots
+#requires columns CHR and POS
+chr_info <- chr_info(bim)    
+
+#add chr_info to SNP info (bim)
+#cumulative base pair (BPcum) is calculated for manhattan plotting
+bim <- left_join(bim,chr_info[,c("CHR","LG","tot")]) %>% 
+       arrange(LG,POS)                               %>% 
+       mutate(BPcum = tot + POS)
+
+
+```
+
+Load pcadapt and outflank results and find overlapping snps
+```{r}
+#read file containing LOC info for outliers snps
+baypass <- read.csv(list.files(dirname(baypass_ext),"*outliers_SNPIDs*", full.names = TRUE))
+pcadapt  <- read_tsv(list.files(dirname(pcadapt_ext),".*all_outliers*", full.names = TRUE))
+
+#create new df with overlapping outliers from pcadapt and outflank 
+combined <- dplyr::inner_join(baypass,pcadapt,by = c("SNPID"="LOC"))
+
+#get maf by pop info
+maf_POP        <- snpgdsSNPmaf_byPOP(gds = gds, pop.id = sample_info$POP, mac = FALSE)
+
+#create seperate vectors for baypass and pcadapt loci
+baypass_vec <- unique(baypass$SNPID)
+pcadapt_vec  <- unique(pcadapt$LOC[which(pcadapt$q <= q)])
+
+#find outliers that overlap between two methods of outlier detection
+overlap_vec <- intersect(baypass_vec,pcadapt_vec)
+overlap_vec_N <- length(overlap_vec)
+bim_overlapping <- bim %>% dplyr::filter(LOC %in% overlap_vec) %>% dplyr::select(CHR,POS,LOC,LG)
+write_tsv(x = bim_overlapping, file = glue::glue("{outfile_ext}_{overlap_vec_N}_overlapping_outliers.tsv"),col_names = FALSE)
+
+#collect all outliers
+merged_vec <- unique(c(baypass_vec,pcadapt_vec))
+merged_vec_N <- length(merged_vec)
+all_outliers <- bim %>% dplyr::filter(LOC %in% merged_vec) %>% dplyr::select(CHR,POS)
+write_tsv(x = all_outliers, file = glue::glue("{outfile_ext}_{merged_vec_N}_all_outliers.tsv"),col_names = FALSE)
+
+```
+
+
+Create venn diagram
+https://r-graph-gallery.com/14-venn-diagramm
+```{r}
+#plot venn diagram 
+myCol <- brewer.pal(3, "Pastel2")[2:3]
+VennDiagram::venn.diagram(x= list(pcadapt_vec, baypass_vec),
+                          category.names = c("Pcadapt","BayPass"),
+                          filename = glue::glue("{outfile_ext}_venn_diagram.png"),
+                          output = TRUE,
+                          disable.logging = TRUE,
+                          # Output features
+                          imagetype="png" ,
+                          height = 700 , 
+                          width = 700 , 
+                          resolution = 300,
+                          compression = "lzw",
+                          # Circles
+                          lwd = 2,
+                          lty = 'blank',
+                          fill = myCol,
+                          # Numbers
+                          cex = .6,
+                          fontface = "bold",
+                          fontfamily = "sans",
+                          # Set names
+                          cat.cex = 0.6,
+                          cat.fontface = "bold",
+                          cat.default.pos = "outer",
+                          cat.pos = c(-20, 20),
+                          cat.dist = c(0.04),
+                          cat.fontfamily = "sans")
+
+```
+
+
+Manhattan plot
+```{r}
+#ALL OVERLAPPING
+#read in all XtX values
+all_XtX <- read_table("/path/to/baypass/{Project}_variablesites_summary_pi_xtx.out")
+
+#read in SNP ID file
+snpID <- read_table("/path/to/baypass/{Project}_snp_ids.txt", col_names=c("CHR","POS","SNPID","MRK"))
+
+#add SNP IDs to XtX table
+all_XtX_ID <- all_XtX %>%
+  left_join(snpID, by = "MRK")
+
+#add XtX info to bim
+bim <- left_join(bim, all_XtX_ID %>% select(SNPID, XtXst), by = c("LOC" = "SNPID"))
+
+
+#add XtX and BPcum info to bim_overlapping
+bim_overlapping <- bim_overlapping %>%
+  mutate(XtXst = combined$XtXst[match(LOC, combined$SNPID)],
+         BPcum = combined$BPcum[match(LOC, combined$SNPID)])
+
+
+#create dataframe with info on each LG to use for grey/white bars in plot
+axisdf = bim %>% 
+  group_by(LG) %>% 
+  summarize(center = (max(as.numeric(BPcum)) + min(as.numeric(BPcum))) / 2,
+            start  = min(as.numeric(BPcum)),
+            stop   = max(as.numeric(BPcum)),
+            ymin   = -0.1,
+            ymax   = 60)
+
+
+#linkage group rectangles
+bg_rect <- annotate("rect", xmin = axisdf$start, xmax = axisdf$stop, 
+    ymin = axisdf$ymin, ymax = axisdf$ymax, alpha = .5, fill = rep(c("darkgrey","white"),length.out=nrow(axisdf))[1:nrow(axisdf)] )
+
+#reduced aesthetics for most plots
+theme_adj  <- theme(axis.title.x        = element_blank(),
+                    axis.text.x         = element_blank(),
+                    axis.ticks.x.bottom = element_blank(),
+                    panel.grid          = element_blank(),
+                    axis.line.y.left    = element_line(),
+                    axis.text.y         = element_text(size = 10),
+                    axis.title.y        = element_text(size = 15),
+                    plot.margin = unit(c(0,0,0.0,0), units = "in"))
+
+#modified aesthetics for last plot 
+theme_last <- theme(panel.grid  = element_blank(),
+                    plot.margin = unit(c(0,0,0.0,0), units = "in"),
+                    axis.text.x = element_text(angle = 0, size = 14),
+                    axis.title.x = element_text(size = 14, face = "bold"),
+                    legend.position = "none")
+
+
+# colour by LG instead of just one colour for all outlier snps
+#set colour palette for LG
+base_cols <- c(
+  "#df536bff",
+  "#61d04fff",
+  "#2297e6ff",
+  "#28e2e5ff",
+  "#cd0bbcff",
+  "#f5c710ff",
+  "#000000ff"
+)
+
+levs <- levels(factor(bim_overlapping$LG))
+
+my_colors <- setNames(
+  rep(base_cols, length.out = length(levs)),
+  levs
+)
+
+whole_manhattan <- ggplot() + bg_rect + theme_bw() +
+  geom_point(data=bim, aes(x = BPcum, y = XtXst), color = "gray50", size = 2, shape = 1) + 
+  geom_point(data=bim_overlapping, aes(x = BPcum, y = XtXst, color = factor(LG)), size = 2) +
+  scale_colour_manual(values = my_colors) +
+  scale_x_continuous(breaks = axisdf$center, labels = axisdf$LG) +
+  labs(x = "Linkage Group") + 
+  ylab(expression(italic(X)^plain(T) ~ italic(X))) + 
+  theme_last 
+
+  
+ggsave(filename = glue("{outfile_ext}_manhattan.png"), plot = whole_manhattan, width = 16, height = 4, dpi=300)
+ggsave(filename = glue("{outfile_ext}_manhattan.pdf"), plot = whole_manhattan, width = 16, height = 4, dpi=96)
+ggsave(filename = glue("{outfile_ext}_manhattan.svg"), plot = whole_manhattan, width = 16, height = 4, dpi=96)
+```
+
+
+
+
+
