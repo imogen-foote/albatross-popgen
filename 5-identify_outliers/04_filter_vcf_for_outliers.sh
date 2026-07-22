@@ -33,7 +33,7 @@ VCF=/path/to/variablesitesvcf/variablesites
 TMP=/path/to/variablesitesvcf/tmp
 mkdir -p $TMP
 outliers=/path/to/outliers/${nSNP}_overlapping_outliers.tsv
-pop_file=/path/to/pop_info.tsv # (POP, IND tab delimited file)
+pop_file=/path/to/pop_info.tsv # (IND POP tab delimited file)
 
 ###
 # 1. Filter vcf file for outliers
