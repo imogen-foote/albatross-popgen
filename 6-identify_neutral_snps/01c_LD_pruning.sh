@@ -21,7 +21,7 @@ HWFILTER=$3 ## Out All, Out Combo or No Filter
 # Set paths
 vcf2R=/path/to/Rscripts/vcf2Rinput.R
 gds2plink=/path/to/Rscripts/gds2plink.R
-pop_file=/path/to/'pop_info.tsv' # 2 column (POP IND) tab delimited population file
+pop_file=/path/to/'pop_info.tsv' # 2 column (IND POP) tab delimited population file
 VCF=/path/to/variablesitesvcf/variablesites
 TMP=/path/to/variablesitesvcf/tmp
 
