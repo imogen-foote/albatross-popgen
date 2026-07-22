@@ -24,7 +24,7 @@
 ##	-a 26-45 with 5h 500MB
 ##	-a 46-65 with 2h 500MB
 
-# Load conda env
+# Load conda env (see vcf_environment.yaml for env specifics)
 module purge && module load Miniconda3
 source $(conda info --base)/etc/profile.d/conda.sh
 export PYTHONNOUSERSITE=1
