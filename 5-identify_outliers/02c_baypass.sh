@@ -15,7 +15,7 @@ module load R/4.3.2-foss-2023a
 
 # Set paths
 baypass=/path/to/out/baypass
-input_file=$baypass/${SET}_baypass_input.txt
+input_file=$baypass/baypass_input.txt
 omega=$baypass/omega_est/omega_subset1_mat_omega.out
 baypass_simulate=./baypass_simulate_data.R
 baypass_threshold=./baypass_calculate_threshold.R
@@ -27,7 +27,7 @@ baypass_R=./baypass_utils.R
 echo "Beginning Baypass..."
 
 baypass -countdatafile $input_file \
-	-outprefix $baypass/${SET} \
+	-outprefix $baypass/prefix \
 	-omegafile $omega \
 	-nthreads 8
 
@@ -37,7 +37,7 @@ baypass -countdatafile $input_file \
 echo "Simulating data to determine XtX threshold..."
 
 # set paths to baypass output from above
-beta=$baypass/${SET}_summary_beta_params.out
+beta=$baypass/summary_beta_params.out
 sim_out=$baypass/simulated_data
 mkdir -p $sim_out
 
@@ -75,20 +75,20 @@ echo "Filtering Baypass output for outlier SNPs..."
 # Use the value stored in G.betapod_threshold.txt to filter Baypass output for outlier SNPs
 thresh=$(cat $sim_out/G.betapod_threshold.txt)
 awk -v t="$thresh" '$4 > t' \
-	$baypass/${SET}_summary_pi_xtx.out \
-	> $baypass/${SET}_baypass_outliers.txt
+	$baypass/summary_pi_xtx.out \
+	> $baypass/baypass_outliers.txt
 
 # Finally, match the outliers with their SNP IDs
 (
   # Print the first header line, add SNPID column
-  head -n 1 "$baypass/${SET}_baypass_outliers.txt" | awk '{print $0, "SNPID"}'
+  head -n 1 "$baypass/baypass_outliers.txt" | awk '{print $0, "SNPID"}'
   
   # Then skip the first line (header) and any other lines matching header text, print rest with SNPID appended
   awk 'FNR==NR {snp[$4]=$3; next}
        NR>1 && $1 != "MRK" {print $0, snp[$1]}' \
-    "$baypass/${PROJECT}_snp_ids.txt" \
-    "$baypass/${SET}_baypass_outliers.txt"
-) > "$baypass/${SET}_baypass_outliers_SNPIDs.txt"
+    "$baypass/snp_ids.txt" \
+    "$baypass/baypass_outliers.txt"
+) > "$baypass/baypass_outliers_SNPIDs.txt"
 
 
 
