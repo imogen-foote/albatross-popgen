@@ -8,7 +8,7 @@
 
 ## Script to merge filtered per-scaffold AllSites VCFs 
 
-# Load conda env
+# Load conda env (see vcf_environment.yaml for env specifics)
 module purge
 module load Miniconda3
 source $(conda info --base)/etc/profile.d/conda.sh
