@@ -1,0 +1,366 @@
+---
+title: "Population genomics analysis"
+author: "Imogen Foote (with scripts from Tom Oosting)"
+date: "2023-05-24"
+output: html_document
+---
+
+# Load libraries
+```{r}
+rm(list=ls())
+library(SNPRelate)
+library(gdsfmt)
+library(glue)
+library(tidyverse)
+library(poppr)
+library(scales)
+library(ggrepel)
+library(pheatmap)
+library(adegenet)
+library(ggsignif)
+library(dartR)
+
+source("/path/to/Rscripts/SNPrelate_functions.R")
+```
+
+# Set variables
+```{r}
+Project   <- "AllAlbatross_antipodeanref"
+
+snpfile_ext <- glue("/path/to/neutralsnps")
+out_dir <- glue("/path/to/out/popgen")
+outfile_ext <- glue("{out_dir}/{Project}")
+dir.create(glue(out_dir))
+```
+
+# Load in data
+```{r}
+## Load GDS file
+gds <- snpgdsReadGDS(vcf_file = paste0(snpfile_ext,".vcf.gz"), 
+                     gds_file = paste0(snpfile_ext,".gds"))
+
+## Load sample information - A tsv file with columns for sample names (IND) & population name (POP)
+sample_info <- read_tsv(glue::glue("/path/to/pop_info.tsv"))
+
+# This file has sampling site (e.g. Dougal) as POP so need to also add SPP column for subspecies comparisons (ANT/GIB)
+# Take prefix of sample name e.g. ANT_SA52 -> ANT)
+sample_info$SPP <- gsub("_.*", "", sample_info$IND)
+
+# Subset sample info to keep only rows where 'IND' is also found in sample.id of gds file (shouldn't change anything because should all be in there but good check)
+sample_info <- sample_info %>% filter(IND %in% read.gdsn(index.gdsn(gds, "sample.id")))
+
+## Read genlight file, or create if doesn't exist yet
+if(file.exists(paste0(snpfile_ext,".genlight.R"))){
+  load(paste0(snpfile_ext,".genlight.R"))
+  strata(genlight) <- sample_info
+} else {
+  vcfR     <- vcfR::read.vcfR(paste0(snpfile_ext,".vcf.gz"))
+  genlight <- vcfR::vcfR2genlight(vcfR)
+  strata(genlight) <- sample_info
+  save(genlight, file = paste0(snpfile_ext,".genlight.R"))
+}
+
+## Check files
+read.gdsn(index.gdsn(gds, "sample.id"))
+length(read.gdsn(index.gdsn(gds, "sample.id")))
+
+genlight@ind.names
+length(genlight@ind.names)
+```
+
+# Set up colours and shapes for plotting
+```{r}
+### By population (Ant, Gib)
+spp_colors <- c("#004a42ff", "#f6991aff")
+spp_shapes <- c(16,17)
+
+
+### By island (Antipodes, Adams, Disappointment)
+island_colors <- c("#004a42ff", "#f6991aff", "#dbbc68bb")
+island_shapes <- c(17, 15, 18)
+```
+
+# Get some summary stats from the GDS file
+```{r}
+snpgdsSummary(gds)
+ 
+# Calculate per SNP info (missing rate, MAF, heterozygosity, ref allele count, alt allele count, ref allele freq, alt allele freq)
+bim <- snpgdsSNPsum(gds = gds, extended = TRUE)
+
+# Get chromosome information (chr length, cumulative length, LG) for downstream analysis incl. manhattan plots
+# Requires columns CHR and POS
+chr_info <- chr_info(bim)    
+
+# Add chr_info to SNP info (bim)
+# Cumulative base pair (BPcum) is calculated for manhattan plotting
+bim <- left_join(bim,chr_info[,c("CHR","tot")]) %>% 
+       arrange(LG,POS)                               %>% 
+       mutate(BPcum = tot + POS)
+```
+
+# Calculate heterozygosity
+```{r}
+pop(genlight) <- sample_info$SPP
+genlight <- gl.compliance.check(genlight)
+# ploidy(genlight) <- 2 ## might be required if fails compliance check
+Het <- gl.report.heterozygosity(genlight, method = "pop")
+write.table(Het, file=glue("{outfile_ext}_heterozygosity.txt"))
+```
+
+# AMOVA
+```{r}
+# Check ploidy of genlight file and set to diploid if it has incorrectly assigned it https://groups.google.com/g/poppr/c/FNajXuqyWsc
+ploidy(genlight)
+ploidy(genlight) <- 2
+
+## Perform AMOVA 
+AMOVA.SPP <- poppr::poppr.amova(genlight, ~SPP)
+capture.output(AMOVA.SPP, file = glue::glue("{outfile_ext}.AMOVA.txt"))
+
+# Significance test
+AMOVA.SPP_significance <- ade4::randtest(AMOVA.SPP, nrepet = 999)
+AMOVA.SPP_significance$names
+AMOVA.SPP_significance$pvalue
+
+capture.output(AMOVA.SPP_significance, file = glue::glue("{outfile_ext}.AMOVA.significance.txt"))
+save(AMOVA.SPP,AMOVA.SPP_significance,file = glue::glue("{outfile_ext}.AMOVA.R"))
+##################################################
+#copy into console below to print full results   #
+AMOVA.significance                               #
+#don't know why in prints different from script  #
+##################################################
+#print significance results
+png(filename = glue::glue("{outfile_ext}.AMOVA.significance_plot.png"), res = 300, height = 4, width = 8 , units = "in"  )
+  plot(AMOVA.SPP_significance)
+dev.off()
+```
+
+# PCA
+```{r}
+## Estimate genetic relationship matrix
+GRM <- snpgdsGRM(gds, sample.id = sample_info$IND, method = "Eigenstrat", autosome.only = FALSE)
+
+## Perform and plot PCA 
+# NOTE: if you want to change the legend title you have to change it within the PCA_manual_colors function
+png(filename =  glue::glue("{outfile_ext}_GRM.ISL.png"), width = 7, height = 4, units = "in", res = 300) 
+  PCA_SNA  <- PCA_manual_colors(GRM$grm, 
+                                sample_info$IND,
+                                sample_info$island,
+                                1, 2,            #PCs to plot
+                                show.point=T, 
+                                show.label=F, 
+                                manual_colors = island_colors, 
+                                manual_shapes = island_shapes,
+                                show.ellipse=T, 
+                                show.line=F, 
+                                alpha=0) 
+dev.off()
+
+## Perform classic PCA - results should the same as the GRM
+pca_snprelate <- snpgdsPCA(gds, autosome.only = FALSE)
+
+# Extract variance proportions explained by each PC and convert to %
+pc.percent <- pca_snprelate$varprop*100
+head(round(pc.percent, 2))
+
+# Create a scree plot
+variance_proportions <- pca_snprelate$varprop
+
+ggplot(data = data.frame(Principal_Component = 1:length(variance_proportions), Variance_Explained = variance_proportions), aes(x = Principal_Component, y = Variance_Explained)) +
+  geom_point(stat = "identity", fill = "skyblue") +
+  geom_point(color = "blue", size = 3) +
+  labs(x = "Principal Component", y = "Variance Explained (%)", title = "Scree Plot") +
+  theme_minimal()
+
+# First make sure populations are in same order as data frame for plotting/legend order
+sample_info$POP <- factor(sample_info$island, levels = unique(sample_info$island))
+
+# Create data frame containing sample.id, population and EV1 and EV2 (first and second eigenvectors from pca_snprelate)
+tab <- data.frame(sample.id  = pca_snprelate$sample.id,
+                  region     = sample_info$island,
+                  EV1        = pca_snprelate$eigenvect[,1],    # the first eigenvector
+                  EV2        = pca_snprelate$eigenvect[,2],    # the second eigenvector
+                  stringsAsFactors = FALSE)
+
+# Selects values where EV1 <= -0.1 and EV2 <= -0.3
+tab_select <- dplyr::filter(tab,EV1 <=  -0.1| EV2 <= -0.3)
+
+# Plot PCA
+png(filename =  glue::glue("{outfile_ext}_PCA.png"), width = 8, height = 4, units = "in", res = 300) 
+  ggplot(tab,aes(x=EV1,y=EV2, color = region ))+
+    geom_point()+
+    geom_text_repel(data = tab_select,aes(x=EV1,y=EV2, color = tab_select$region, label = tab_select$sample.id), show.legend = F,max.overlaps = 30)+
+    xlab(glue("PC1 ({round(pc.percent[1],2)}%)"))+
+    ylab(glue("PC2 ({round(pc.percent[2],2)}%)")) +
+    theme(
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.75),
+      panel.background = element_blank(),
+      panel.grid.major = element_line(color = "grey", linewidth = 0.25),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank(),
+      legend.key = element_blank()) +
+    labs(color = "Sampling island")
+dev.off()
+  
+# Calculate SNP loadings from PCA
+pca_snprelate_load  <- snpgdsPCASNPLoading(pca_snprelate, gds, num.thread=1L, verbose=TRUE)
+
+# Plot loadings
+png(filename =  glue::glue("{outfile_ext}_PCA_loadings.png"), width = 8, height = 6, units = "in", res = 300) 
+par(mfrow=c(2,1))
+  plot(pca_snprelate_load$snploading[1,], type="h", ylab="PC 1")
+  plot(pca_snprelate_load$snploading[2,], type="h", ylab="PC 2")
+dev.off()
+```
+
+# FST
+```{r}
+### By POP (sampling site e.g. Dougal)
+PWFST_df <- snpgdsPWFST(gds = gds,
+                        pop.id = sample_info$POP,
+                        reps = 10000,
+                        signf = 0.05,
+                        missing.rate = 0.95,
+                        #snp.id = SNPs_neutral)
+                        )
+
+# Convert FST estimates to matrix
+PWFST_mat <- snpgdsFSTdf2mat(pwFST_df = PWFST_df) 
+PWFST_mat[PWFST_mat < 0] <- 0
+colnames(PWFST_mat) <- str_replace_all(colnames(PWFST_mat),"_"," ")
+rownames(PWFST_mat) <- str_replace_all(rownames(PWFST_mat),"_"," ")
+
+# Save tsv
+write.csv(PWFST_df, paste0(outfile_ext,"_pwFST.POP.csv"))
+
+## Create heat maps
+# Set legend breaks manually
+legend_breaks <- c(0, 0.01, 0.02, 0.03, 0.04, 0.05)
+# Create heatmap png
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue::glue("{outfile_ext}_heatmapplot.POP.png")
+                   ,width = 12
+                   ,height = 8
+                   ,fontsize_number = 14
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+
+# Create heatmap pdf
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue("{outfile_ext}_heatmapplot.POP.pdf")
+                   ,width = 8
+                   ,height = 8
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+
+
+### By subspecies (Ant and Gib)
+PWFST_df <- snpgdsPWFST(gds = gds,
+                        pop.id = sample_info$SPP,
+                        reps = 10000,
+                        signf = 0.05,
+                        missing.rate = 0.95,
+                        #snp.id = SNPs_neutral,)
+                        )
+
+
+# Convert FST estimates to matrix
+PWFST_mat <- snpgdsFSTdf2mat(pwFST_df = PWFST_df) 
+PWFST_mat[PWFST_mat < 0] <- 0
+colnames(PWFST_mat) <- str_replace_all(colnames(PWFST_mat),"_"," ")
+rownames(PWFST_mat) <- str_replace_all(rownames(PWFST_mat),"_"," ")
+
+# Save tsv
+write.csv(PWFST_df, paste0(outfile_ext,"_pwFST.SPP.csv"))
+
+## Create heat maps
+# Set legend breaks manually
+legend_breaks <- c(0, 0.01, 0.02, 0.03, 0.04, 0.05)
+# Create heatmap png
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue::glue("{outfile_ext}_heatmapplot.SPP.png")
+                   ,width = 12
+                   ,height = 8
+                   ,fontsize_number = 14
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+# Create heatmap pdf
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue("{outfile_ext}_heatmapplot.SPP.pdf")
+                   ,width = 8
+                   ,height = 8
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+
+
+### By sampling island
+PWFST_df <- snpgdsPWFST(gds = gds,
+                        pop.id = sample_info$island,
+                        reps = 10000,
+                        signf = 0.05,
+                        missing.rate = 0.95,
+                        #snp.id = SNPs_neutral,)
+                        )
+
+# Convert FST estimates to matrix
+PWFST_mat <- snpgdsFSTdf2mat(pwFST_df = PWFST_df) 
+PWFST_mat[PWFST_mat < 0] <- 0
+colnames(PWFST_mat) <- str_replace_all(colnames(PWFST_mat),"_"," ")
+rownames(PWFST_mat) <- str_replace_all(rownames(PWFST_mat),"_"," ")
+
+# Save tsv
+write.csv(PWFST_df, paste0(outfile_ext,"_pwFST.island.csv"))
+
+# Create heat maps
+# Set legend breaks manually
+legend_breaks <- c(0, 0.01, 0.02, 0.03, 0.04, 0.05)
+# Create heatmap png
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue::glue("{outfile_ext}_heatmapplot.island.png")
+                   ,width = 12
+                   ,height = 8
+                   ,fontsize_number = 14
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+
+glue::glue("{outfile_ext}_heatmapplot.island.png")
+
+# Create heatmap pdf
+pheatmap::pheatmap(PWFST_mat,cutree_rows = 1
+                   ,cutree_cols = 1
+                   ,display_numbers = T
+                   ,number_format = "%.5f"
+                   ,filename = glue("{outfile_ext}_heatmapplot.island.pdf")
+                   ,width = 8
+                   ,height = 8
+                   #you can add a legend title, but you'd have to set the legend break yourself..
+                   ,legend_breaks = c(legend_breaks, max(PWFST_mat))
+                   ,legend_labels = c(legend_breaks, "FST\n")
+)
+
+```
