@@ -1,0 +1,63 @@
+---
+title: "GONE plotting"
+author: "Imogen Foote"
+date: "2024-04-16"
+output: html_document
+---
+
+
+Load libraries
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(readr)
+library(glue)
+
+```
+
+Set paths
+```{r}
+
+file_ext <- glue("/path/to/output/GONE")
+
+```
+
+Load in data
+```{r}
+#Load GDS file
+Ne_antip <- read.csv(paste0(file_ext,"/Output_Ne_",Project,"_ant.csv"))
+Ne_gibson <- read.csv(paste0(file_ext,"/Output_Ne_",Project,"_gib.csv"))
+
+
+Ne_antip200 <- Ne_antip %>% slice(1:200)
+Ne_gibson200 <- Ne_gibson %>% slice(1:200)
+
+ggplot() +
+  geom_point(data = Ne_antip200, aes(x=Generation, y=Geometric_mean), color = "#2c6b94ff", size = 2) +
+  geom_point(data = Ne_gibson200, aes(x=Generation, y=Geometric_mean), color = "#ee525fff", size = 2) +
+  annotate("text", x = 175, y = 18000, label = "Antipodean", size = 6) +
+  annotate("text", x = 150, y = 30000, label = "Gibson's", size = 6) +
+  theme_bw() +
+  scale_y_continuous(labels = function(y) format(y, scientific = FALSE)) +
+  ylab(expression(N[e])) +
+  xlab("Generations from present")
+
+
+ggplot() +
+  geom_line(data = Ne_antip200, aes(x=Generation, y=Geometric_mean), color = "#004a42ff", size = 2) +
+  geom_line(data = Ne_gibson200, aes(x=Generation, y=Geometric_mean), color = "#f6991aff", size = 2) +
+  annotate("text", x = 125, y = 75000, label = "Antipodean", size = 6) +
+  annotate("text", x = 125, y = 20000, label = "Gibson's", size = 6) +
+  theme_bw() +
+  scale_y_continuous(labels = function(y) format(y, scientific = FALSE)) +
+  ylab(expression(N[e])) +
+  xlab("Generations from present")
+
+ggsave(filename = paste0(file_ext,"/","GONE.png"), height = 5, width = 8, dpi=300)
+ggsave(filename = paste0(file_ext,"/","GONE.pdf"), height = 5, width = 8, dpi=300)
+
+
+```
+
+
+```
