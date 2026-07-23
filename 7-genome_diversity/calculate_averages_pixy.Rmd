@@ -1,0 +1,81 @@
+---
+title: "Pixy averages"
+author: "Imogen Foote"
+date: "2026-07-4"
+output: html_document
+---
+
+Load libraries
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(glue)
+```
+
+Set WD
+```{r}
+DIR <- glue("path/to/out/pixy/")
+```
+
+Load in data
+```{r}
+# Load pi values 
+pi <- read.table(paste0(DIR,"pixy_pi.txt"), header=TRUE)
+
+# Load dxy values 
+dxy <- read.table(paste0(DIR,"pixy_dxy.txt"), header=TRUE)
+
+# Load theta values 
+theta <- read.table(paste0(DIR,"pixy_watterson_theta.txt"), header=TRUE)
+
+
+```
+
+Calculate average pi
+```{r}
+# First we must split into separate pops
+ant_pi <- pi %>% filter(pop == "Antipodean")
+gib_pi <- pi %>% filter(pop == "Gibsons")
+
+# Calculate average pi by pop
+mean_ant_pi <- sum(ant_pi$count_diffs, na.rm=TRUE) / sum(ant_pi$count_comparisons, na.rm=TRUE)
+mean_gib_pi <- sum(gib_pi$count_diffs, na.rm=TRUE) / sum(gib_pi$count_comparisons, na.rm=TRUE)
+
+mean_all_pi <- sum(pi$count_diffs, na.rm=TRUE) / sum(pi$count_comparisons, na.rm=TRUE)
+
+```
+
+Calculate average dxy
+```{r}
+# Calculate average dxy
+mean_dxy <- sum(dxy$count_diffs, na.rm=TRUE) / sum(dxy$count_comparisons, na.rm=TRUE)
+
+```
+
+Calculate average theta
+```{r}
+# Calculate average theta
+mean_theta <- sum(theta$raw_watterson_theta, na.rm=TRUE) / sum(theta$no_sites, na.rm=TRUE)
+
+# And by pop
+ant_theta <- theta %>% filter(pop == "Antipodean")
+gib_theta <- theta %>% filter(pop == "Gibsons")
+
+mean_ant_theta <- sum(ant_theta$raw_watterson_theta, na.rm=TRUE) / sum(ant_theta$no_sites, na.rm=TRUE)
+mean_gib_theta <- sum(gib_theta$raw_watterson_theta, na.rm=TRUE) / sum(gib_theta$no_sites, na.rm=TRUE)
+
+```
+
+Save as table
+```{r}
+stats <- data.frame(
+  pi = c(mean_ant_pi, mean_gib_pi),
+  theta = c(mean_ant_theta, mean_gib_theta),
+  dxy = mean_dxy
+)
+rownames(stats) <- c("Antipodean", "Gibson's")
+
+
+write.table(stats, file=glue(DIR,"/pixy_averages.txt"))
+
+```
